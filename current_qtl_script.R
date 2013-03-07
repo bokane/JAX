@@ -150,30 +150,30 @@ sort(adip.phenotypes.cor)
 ###########################################################
 ###create cross structure for gex mapping analysis 
 
+#adds expression data to temporary variable
 tmp <- as.data.frame(cbind(hypo.rz[,indx.hypo],adipose.rz[,indx.adip]))
 names(tmp)  <- c(paste("hypo.",annot[indx.hypo, "gene_symbol"],sep=''),
   paste("adip.",annot[indx.adip, "gene_symbol"],sep=''))
-  
-names(f2g$pheno)
-
-f2g$pheno <- cbind(f2g$pheno[,c(2,6,7)])
-#3names(f2g$pheno)
-
-#summary(f2g)
-#rm(tmp)
+#adds all phenotype data to temporary variable
+#(del)select columns as you wish to limit amount of 
+#imported data
 
 tmp2 <-as.data.frame(phenotypes.rz[,-1])
 
-names(f2g$pheno)
-
-f2g$pheno <- cbind(f2g$pheno[,c(2,6,7)], tmp2)
+f2g$pheno <- cbind(f2g$pheno[,c(2,6,7)])
 
 f2g$pheno <- cbind(f2g$pheno, tmp, tmp2)
 
+#double check columns
 names(f2g$pheno)
 
+#preview data before beginning more stuff,
+#make sure everything is entered properly
 summary(f2g)
 
+#clear workspace; remove temp variables from above
+rm(tmp2)
+rm(tmp)
 ###########################################################
 ### pairwise scatterplots
 
@@ -257,15 +257,17 @@ sex <- as.numeric(f2g$pheno$Sex)
 # 2 dimensional QTL scans #
 ###########################
 
-my.scan2a <- scantwo(f2g, pheno.col=c(4:8), addcovar=sex, method="hk")
+#keep commented out until run time can be improved
 
-plot(my.scan2a, verbose=FALSE)
+#my.scan2a <- scantwo(f2g, pheno.col=c(4:8), addcovar=sex, method="hk")
+
+#plot(my.scan2a, verbose=FALSE)
 #######################
 # Regular  QTL  scans #
 #######################
 
 #scan with sex as an additive covariate
-my.scan1a <- scanone(f2g, pheno.col=c(4:146), addcovar=sex, method="hk")
+my.scan1a <- scanone(f2g, pheno.col=c(4:148), addcovar=sex, method="hk")
 #
 #run permutations
 my.perm1a <-scanone(f2g,pheno.col=8,addcovar=sex,method="hk",n.perm=100,perm.Xsp=TRUE)
