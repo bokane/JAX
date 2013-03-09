@@ -1,0 +1,280 @@
+#############################################################################
+# This Script performs parallel computing
+# using qtlnet
+# Sources:http://cran.r-project.org/web/packages/qtlnet/index.html
+#         http://www.stat.wisc.edu/~yandell/statgen/sisg/qdg_qtlnet_slides.pdf
+# March 1, 2013
+##############################################################################
+
+# 
+#set working directory
+setwd("C:/Users/Ying Qi/Desktop/B6XBTBR/BTBR_ISCB_Data")
+
+#load qtl library
+library(qtl)
+library(ggplot2)
+library(lattice)
+# For Windows
+if(.Platform$OS.type=="windows") {
+  quartz<-function() windows()
+}
+###########################################################
+### load the data 
+load("BTBR.clean.data.RData")
+#load("annot.RData")
+#
+ls()
+
+rm(list=c("batch.adipose","batch.gastroc","batch.hypo",     
+          "batch.islet","batch.kidney","batch.liver","cpl","d2o",            
+          "gastroc.mlratio","hypo.mlratio","islet.mlratio","kidney.mlratio", 
+          "liverTG","rbm","necropsy","plasmaurine"))
+ls()
+
+# Npy
+
+Npy <- grep('^Npy',annot$gene_symbol,value=TRUE)
+Npy.indx <- grep('^Npy',annot$gene_symbol)[4]
+
+Npy.expr <- as.data.frame(cbind(
+  hypo.rz[,annot[Npy.indx,"a_gene_id"]],
+  adipose.rz[,annot[Npy.indx,"a_gene_id"]]
+))
+
+names(Npy.expr) <- c("Npy.hypo","Npy.adip")
+
+
+# Tnf
+
+Tnf <- grep('^Tnf',annot$gene_symbol,value=TRUE)
+Tnf.indx <- grep('^Tnf',annot$gene_symbol)[9]
+
+Tnf.expr <- as.data.frame(cbind(
+  hypo.rz[,annot[Tnf.indx,"a_gene_id"]],
+  adipose.rz[,annot[Tnf.indx,"a_gene_id"]]
+))
+
+names(Tnf.expr) <- c("Tnf.hypo","Tnf.adip")
+
+#Lepr
+
+Lepr<- grep('^Lepr',annot$gene_symbol,value=TRUE)
+Lepr.indx <-grep('^Lepr',annot$gene_symbol)[2]
+
+Lepr.expr <- as.data.frame(cbind(
+  hypo.rz[,annot[Lepr.indx,"a_gene_id"]],
+  adipose.rz[,annot[Lepr.indx,"a_gene_id"]]
+))
+
+names(Lepr.expr) <- c("Lepr.hypo","Lepr.adip")
+
+# Il1b
+
+
+Il1b <- grep('^Il1b',annot$gene_symbol,value=TRUE)
+Il1b.indx <- grep('^Il1b',annot$gene_symbol)[1]
+
+Il1b.expr <- as.data.frame(cbind(
+  hypo.rz[,annot[Il1b.indx,"a_gene_id"]],
+  adipose.rz[,annot[Il1b.indx,"a_gene_id"]]
+))
+
+names(Il1b.expr) <- c("Il1b.hypo","Il1b.adip")
+
+
+indx.hypo <- c(Npy.indx, Tnf.indx, Lepr.indx, Il1b.indx)
+#annot[indx.hypo, c("a_gene_id","gene_symbol")]
+
+indx.adip <- c(Npy.indx, Tnf.indx, Lepr.indx, Il1b.indx)
+#annot[indx.adip, c("a_gene_id","gene_symbol")]
+
+
+####################################################################################
+# Create Cross Structure for Parallel Computing
+
+####################################################################################
+tmp3 <- as.data.frame(cbind(hypo.rz[,indx.hypo],adipose.rz[,indx.adip],phenotypes.rz[104], phenotypes.rz[114], phenotypes.rz[139]))
+names(tmp3)  <- c(paste("hypo.",annot[indx.hypo, "gene_symbol"],sep=''),
+                 paste("adip.",annot[indx.adip, "gene_symbol"],sep=''),
+                 paste(names(phenotypes.rz[104]), sep = ''),
+                 paste(names(phenotypes.rz[114]), sep = ''),
+                 paste(names(phenotypes.rz[139]), sep = ''))
+
+
+                 
+
+names(f2g$pheno)
+
+f2g$pheno <- cbind(f2g$pheno[,c(2,6,7)], tmp3)
+names(f2g$pheno)
+
+f2g$pheno[,-c(1,2,3)]
+
+summary(f2g)
+rm(tmp3)
+############################################################
+# Computes BIC score
+
+
+attach(f2g)
+
+BIC(lm(pheno$hypo.Npy ~ pheno$hypo.Npy))
+
+
+
+BIC(lm(pheno$hypo.Npy ~ pheno$hypo.Il1b))
+
+#BIC(lm())
+
+
+############################################################
+
+####################################################################################
+# Parallel computing for gene expression
+#
+####################################################################################
+
+library(qtlnet)
+#######STEP 1#######
+
+pheno.col <- 4:14
+# Phenotype identifier from cross object
+
+max.parents <- 5
+
+
+size.qtlnet(pheno.col, max.parents) # determines number of scanone possible with
+# network with nodes pheno.col and maximum parent size max.parents
+# reduce complexity of computation and shortens runtime
+
+
+parents <- parents.qtlnet(pheno.col, max.parents) # Creates a list of all parent sets to be used
+# as covariates of child phenotypes in scanone calculations
+
+
+groups <- group.qtlnet(parents = parents, group.size = 10) # groups parents into approx equal sized groups
+# for parallel computations; 
+
+save(f2g, pheno.col, max.parents, parents, groups,file = "Step1.RData", compress = TRUE)
+
+pa <- summary(parents)
+
+#######STEP 2#######
+
+# runs scanone on each phenotype with parent phenotype as covariates
+# precompute BIC scores using scanone on a "grid of computers", PARALLELIZE
+
+N <-rep(NA,nrow(groups))
+
+for (i in 1:nrow(groups))
+  N[i] <- sum(pa[seq(groups[i,1], groups[i,2]),2])
+
+
+
+
+for(i in seq(nrow(groups))){
+  
+  bic <- bic.qtlnet(f2g,
+                    pheno.col,
+                    threshold = 3.04,
+                    max.parents = max.parents,
+                    parents = parents[seq(groups[i,1], groups[i,2])]) #iterator?
+  save(bic, file = paste("bic", i, ".RData", sep = ""), compress = TRUE)
+  
+}
+
+
+#######STEP 3########
+
+# MCMC, parallelize
+
+
+load("Step1.RData")
+
+
+# Read in saved BIC score and combine into one object
+bic.group <- list()
+
+for(i in seq(nrow(groups))){
+  
+  load(paste("bic", i, ".RData", sep = ""))
+  bic.group[[i]] <- bic
+  cat("group =", i, "\n")
+  
+  
+  
+}
+
+saved.scores <- bic.join(f2g, pheno.col = pheno.col[], bic.group, max.parents = 5)
+
+saved.scores
+
+
+### sample Markov chain (MCMC)
+
+set.seed(54321)
+
+n.runs <- 3
+# sets number of parallel runs
+
+# parallelize this
+for (i in seq(n.runs))
+{
+  
+  cat("run = ", i, "\n")
+  ## Run MCMC with randomized initial network
+  mcmc <- mcmc.qtlnet(f2g,
+                      pheno.col,
+                      threshold = 3.04,
+                      thinning = 1,
+                      max.parents = max.parents,
+                      saved.scores = saved.scores,
+                      init.edges = NULL)    #?
+  save(mcmc, file = paste("mcmc", i, ".RData", sep = ""), compress = TRUE)
+  
+  
+}
+
+
+#########STEP 4#############
+# Combine results for Post-processing
+
+outs.qtlnet <-list()
+for (i in seq(n.runs)){
+  
+  load(paste("mcmc", i, ".RData", sep = ""))
+  outs.qtlnet[[i]] <- mcmc
+}
+
+out3 <-c.qtlnet(outs.qtlnet) # catenates the outputs from 3 separate runs together
+
+summary(out3)
+plot(out3)
+
+###################################
+#
+# Compute BIC score
+#
+###################################
+
+BIC(lm(pheno$hypo.Npy ~ pheno$hypo.Tnf + pheno$hypo.Il1b + pheno$adip.Tnf))
+
+BIC(lm(pheno$hypo.Tnf ~ pheno$hypo.Npy + pheno$hypo.Il1b))
+
+BIC(lm(pheno$hypo.Lepr ~ pheno$hypo.Npy + pheno$hypo.Il1b))
+
+#1,2,3,4,7
+BIC(lm(pheno$hypo.Il1b ~ pheno$hypo.Npy + pheno$hypo.Tnf + pheno$hypo.Lepr + pheno$adip.Npy + pheno$adip.Il1b))
+
+#4,6
+BIC(lm(pheno$adip.Npy ~ pheno$hypo.Il1b + pheno$adip.Lepr))
+
+#1,6
+BIC(lm(pheno$adip.Tnf ~ pheno$hypo.Npy + pheno$adip.Lepr))
+
+#5,7
+BIC(lm(pheno$adip.Lepr ~ pheno$adip.Npy + pheno$adip.Lepr))
+
+#Q1 <- as.matric(f2g$pheno[[1]]$prob[,find.marker])
+
+
